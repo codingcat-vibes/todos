@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vue Todo App</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+</head>
+<body class="bg-gradient-to-br from-gray-400 to-gray-600 min-h-screen p-5">
+    <div id="app">
+        <div class="max-w-2xl mx-auto bg-white rounded-3xl shadow-2xl overflow-hidden">
+            <!-- Header -->
+            <div class="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-8 text-center">
+                <h1 class="text-4xl font-light mb-2">Todo App</h1>
+                <p class="text-blue-100 text-lg">Stay organized and productive</p>
+            </div>
+
+            <!-- Input Section -->
+            <div class="p-8 border-b border-gray-100">
+                <div class="flex gap-3">
+                    <input 
+                        v-model="newTodo"
+                        @keyup.enter="addTodo"
+                        type="text" 
+                        placeholder="What needs to be done?"
+                        class="flex-1 px-6 py-4 border-2 border-gray-200 rounded-full text-lg outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all duration-300"
+                    >
+                    <button 
+                        @click="addTodo"
+                        :disabled="!newTodo.trim()"
+                        class="px-8 py-4 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-full font-semibold hover:shadow-lg hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none transition-all duration-300"
+                    >
+                        Add
+                    </button>
+                </div>
+            </div>
+
+            <!-- Filters -->
+            <div class="px-8 py-5 bg-gray-50 border-b border-gray-100">
+                <div class="flex justify-center gap-3">
+                    <button 
+                        v-for="filter in filters"
+                        :key="filter"
+                        @click="currentFilter = filter"
+                        :class="[
+                            'px-6 py-2 rounded-full text-sm font-medium transition-all duration-300',
+                            currentFilter === filter 
+                                ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white' 
+                                : 'bg-white text-gray-600 hover:text-blue-500 hover:border-blue-500 border-2 border-transparent'
+                        ]"
+                    >
+                        {{ filter }}
+                    </button>
+                </div>
+            </div>
+
+            <!-- Todo List -->
+            <div class="min-h-64 max-h-96 overflow-y-auto">
+                <div v-if="filteredTodos.length === 0" class="p-12 text-center text-gray-400">
+                    <div class="text-6xl mb-4">📝</div>
+                    <p class="text-lg">{{ getEmptyMessage() }}</p>
+                </div>
+                
+                <div 
+                    v-for="todo in filteredTodos" 
+                    :key="todo.id"
+                    class="flex items-center p-6 border-b border-gray-100 hover:bg-gray-50 transition-colors duration-200 animate-fade-in"
+                    :class="{ 'opacity-60': todo.completed }"
+                >
+                    <!-- Checkbox -->
+                    <input 
+                        v-model="todo.completed"
+                        type="checkbox"
+                        class="w-5 h-5 mr-4 accent-blue-500 cursor-pointer"
+                    >
+
+                    <!-- Todo Text / Edit Input -->
+                    <div v-if="editingId !== todo.id" class="flex-1">
+                        <span 
+                            @dblclick="startEdit(todo)"
+                            :class="[
+                                'text-lg cursor-pointer select-none',
+                                todo.completed ? 'line-through text-gray-500' : 'text-gray-800'
+                            ]"
+                        >
+                            {{ todo.text }}
+                        </span>
+                    </div>
+                    
+                    <input 
+                        v-else
+                        v-model="editText"
+                        @keyup.enter="saveEdit(todo)"
+                        @keyup.escape="cancelEdit"
+                        ref="editInput"
+                        class="flex-1 px-4 py-2 mr-3 border-2 border-blue-500 rounded-lg text-lg outline-none"
+                    >
+
+                    <!-- Action Buttons -->
+                    <div class="flex gap-2">
+                        <template v-if="editingId !== todo.id">
+                            <button 
+                                @click="startEdit(todo)"
+                                class="px-3 py-1.5 bg-green-500 text-white text-xs font-semibold rounded-lg hover:bg-green-600 transition-colors duration-200"
+                            >
+                                Edit
+                            </button>
+                            <button 
+                                @click="deleteTodo(todo.id)"
+                                class="px-3 py-1.5 bg-red-500 text-white text-xs font-semibold rounded-lg hover:bg-red-600 transition-colors duration-200"
+                            >
+                                Delete
+                            </button>
+                        </template>
+                        <template v-else>
+                            <button 
+                                @click="saveEdit(todo)"
+                                class="px-3 py-1.5 bg-blue-500 text-white text-xs font-semibold rounded-lg hover:bg-blue-600 transition-colors duration-200"
+                            >
+                                Save
+                            </button>
+                            <button 
+                                @click="cancelEdit"
+                                class="px-3 py-1.5 bg-gray-500 text-white text-xs font-semibold rounded-lg hover:bg-gray-600 transition-colors duration-200"
+                            >
+                                Cancel
+                            </button>
+                        </template>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stats -->
+            <div class="px-8 py-5 bg-gray-50 text-center text-gray-600 text-sm">
+                <p>
+                    {{ completedCount }} of {{ todos.length }} tasks completed
+                    <span v-if="todos.length > 0" class="mx-2">•</span>
+                    <span v-if="todos.length > 0">{{ Math.round(completedCount / todos.length * 100) }}% done</span>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Check if Vue is loaded
+        if (typeof Vue === 'undefined') {
+            console.error('Vue is not loaded');
+        }
+        
+        const { createApp, ref, computed, nextTick } = Vue;
+
+        createApp({
+            setup() {
+                const todos = ref([]);
+                const newTodo = ref('');
+                const currentFilter = ref('All');
+                const filters = ref(['All', 'Active', 'Completed']);
+                const editingId = ref(null);
+                const editText = ref('');
+
+                // Computed properties
+                const filteredTodos = computed(() => {
+                    switch (currentFilter.value) {
+                        case 'Active':
+                            return todos.value.filter(todo => !todo.completed);
+                        case 'Completed':
+                            return todos.value.filter(todo => todo.completed);
+                        default:
+                            return todos.value;
+                    }
+                });
+
+                const completedCount = computed(() => {
+                    return todos.value.filter(todo => todo.completed).length;
+                });
+
+                // Methods
+                const addTodo = () => {
+                    if (newTodo.value.trim()) {
+                        todos.value.push({
+                            id: Date.now(),
+                            text: newTodo.value.trim(),
+                            completed: false
+                        });
+                        newTodo.value = '';
+                    }
+                };
+
+                const deleteTodo = (id) => {
+                    todos.value = todos.value.filter(todo => todo.id !== id);
+                };
+
+                const startEdit = (todo) => {
+                    editingId.value = todo.id;
+                    editText.value = todo.text;
+                    nextTick(() => {
+                        const editInput = document.querySelector('input[ref="editInput"]');
+                        if (editInput) editInput.focus();
+                    });
+                };
+
+                const saveEdit = (todo) => {
+                    if (editText.value.trim()) {
+                        todo.text = editText.value.trim();
+                    }
+                    cancelEdit();
+                };
+
+                const cancelEdit = () => {
+                    editingId.value = null;
+                    editText.value = '';
+                };
+
+                const getEmptyMessage = () => {
+                    switch (currentFilter.value) {
+                        case 'Active':
+                            return 'No active tasks. Great job!';
+                        case 'Completed':
+                            return 'No completed tasks yet.';
+                        default:
+                            return 'No todos yet. Add one above!';
+                    }
+                };
+
+                return {
+                    todos,
+                    newTodo,
+                    currentFilter,
+                    filters,
+                    editingId,
+                    editText,
+                    filteredTodos,
+                    completedCount,
+                    addTodo,
+                    deleteTodo,
+                    startEdit,
+                    saveEdit,
+                    cancelEdit,
+                    getEmptyMessage
+                };
+            }
+        }).mount('#app');
+    </script>
+
+    <style>
+        @keyframes fade-in {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in {
+            animation: fade-in 0.3s ease-out;
+        }
+    </style>
+</body>
+</html>
