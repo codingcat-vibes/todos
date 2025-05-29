@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vue Todo App</title>
+    <title>Todo with Drag and Drop</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
 </head>
@@ -63,11 +63,31 @@
                 </div>
                 
                 <div 
-                    v-for="todo in filteredTodos" 
+                    v-for="(todo, index) in filteredTodos" 
                     :key="todo.id"
-                    class="flex items-center p-6 border-b border-gray-100 hover:bg-gray-50 transition-colors duration-200 animate-fade-in"
-                    :class="{ 'opacity-60': todo.completed }"
+                    draggable="true"
+                    @dragstart="handleDragStart($event, index)"
+                    @dragover.prevent="handleDragOver($event, index)"
+                    @drop="handleDrop($event, index)"
+                    @dragend="handleDragEnd"
+                    class="flex items-center p-6 border-b border-gray-100 hover:bg-gray-50 transition-colors duration-200 animate-fade-in cursor-move"
+                    :class="{ 
+                        'opacity-60': todo.completed,
+                        'bg-blue-50 border-blue-200': draggedIndex === index,
+                        'border-t-4 border-t-blue-400': dragOverIndex === index && draggedIndex !== index
+                    }"
                 >
+                    <!-- Drag Handle -->
+                    <div class="mr-3 text-gray-400 hover:text-gray-600 cursor-grab active:cursor-grabbing">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <circle cx="9" cy="12" r="1"/>
+                            <circle cx="9" cy="5" r="1"/>
+                            <circle cx="9" cy="19" r="1"/>
+                            <circle cx="15" cy="12" r="1"/>
+                            <circle cx="15" cy="5" r="1"/>
+                            <circle cx="15" cy="19" r="1"/>
+                        </svg>
+                    </div>
                     <!-- Checkbox -->
                     <input 
                         v-model="todo.completed"
@@ -158,6 +178,8 @@
                 const filters = ref(['All', 'Active', 'Completed']);
                 const editingId = ref(null);
                 const editText = ref('');
+                const draggedIndex = ref(null);
+                const dragOverIndex = ref(null);
 
                 // Computed properties
                 const filteredTodos = computed(() => {
@@ -223,6 +245,50 @@
                     }
                 };
 
+                // Drag and Drop Methods
+                const handleDragStart = (event, index) => {
+                    draggedIndex.value = index;
+                    event.dataTransfer.effectAllowed = 'move';
+                    event.dataTransfer.setData('text/html', event.target);
+                };
+
+                const handleDragOver = (event, index) => {
+                    event.preventDefault();
+                    event.dataTransfer.dropEffect = 'move';
+                    dragOverIndex.value = index;
+                };
+
+                const handleDrop = (event, dropIndex) => {
+                    event.preventDefault();
+                    
+                    if (draggedIndex.value === null || draggedIndex.value === dropIndex) {
+                        return;
+                    }
+
+                    // Get the actual todos being displayed (filtered)
+                    const currentTodos = filteredTodos.value;
+                    const draggedTodo = currentTodos[draggedIndex.value];
+                    const targetTodo = currentTodos[dropIndex];
+
+                    // Find their positions in the main todos array
+                    const draggedMainIndex = todos.value.findIndex(todo => todo.id === draggedTodo.id);
+                    const targetMainIndex = todos.value.findIndex(todo => todo.id === targetTodo.id);
+
+                    // Remove dragged item and insert at new position
+                    const todosCopy = [...todos.value];
+                    const [removed] = todosCopy.splice(draggedMainIndex, 1);
+                    todosCopy.splice(targetMainIndex, 0, removed);
+                    
+                    todos.value = todosCopy;
+                    
+                    dragOverIndex.value = null;
+                };
+
+                const handleDragEnd = () => {
+                    draggedIndex.value = null;
+                    dragOverIndex.value = null;
+                };
+
                 return {
                     todos,
                     newTodo,
@@ -230,6 +296,8 @@
                     filters,
                     editingId,
                     editText,
+                    draggedIndex,
+                    dragOverIndex,
                     filteredTodos,
                     completedCount,
                     addTodo,
@@ -237,7 +305,11 @@
                     startEdit,
                     saveEdit,
                     cancelEdit,
-                    getEmptyMessage
+                    getEmptyMessage,
+                    handleDragStart,
+                    handleDragOver,
+                    handleDrop,
+                    handleDragEnd
                 };
             }
         }).mount('#app');
